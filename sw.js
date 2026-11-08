@@ -1,5 +1,5 @@
 /* Service worker voor Zoek Oswin: werkt offline na het eerste bezoek. */
-var CACHE='zoek-oswin-v2';
+var CACHE='zoek-oswin-v3';
 var FILES=['./','index.html','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','icon-maskable-512.png','apple-touch-icon.png','favicon-32.png'];
 
 self.addEventListener('install',function(e){

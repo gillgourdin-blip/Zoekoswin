@@ -184,8 +184,11 @@ button{touch-action:manipulation}
       <div class="card">
         <p class="eyebrow">Toverschool, avondronde</p>
         <h2>Zoek Oswin</h2>
-        <p>Oswin is weer verdwaald tussen de leerlingen. Sleep om rond te kijken, knijp of scroll om in te zoomen en tik op hem zodra je hem ziet. Een misser kost 4 seconden. Elke zaal wordt opnieuw opgebouwd en is drukker dan de vorige. Af en toe moet je meerdere vrienden van Oswin vinden. Let ook op draken, eenhoorns, geesten en feniksen.</p>
-        <button class="btn primary" id="startBtn" type="button">Start de zoektocht</button>
+        <p>Oswin is weer verdwaald tussen de leerlingen. Sleep om rond te kijken, knijp of scroll om in te zoomen en tik op hem zodra je hem ziet. Een misser kost 4 seconden. Elke zaal wordt opnieuw opgebouwd en is drukker dan de vorige. Af en toe moet je meerdere vrienden van Oswin vinden. Let ook op draken, eenhoorns, geesten en feniksen. Je zaal en score worden op dit toestel bewaard.</p>
+        <div class="row">
+          <button class="btn primary" id="resumeSaveBtn" type="button" hidden>Verdergaan</button>
+          <button class="btn primary" id="startBtn" type="button">Start de zoektocht</button>
+        </div>
       </div>
     </div>
 
@@ -794,6 +797,16 @@ var view=$('view'),vctx=view.getContext('2d'),stage=$('stage');
 var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 var state={phase:'intro',level:1,score:0,best:0,hints:3,timeLeft:72,maxTime:72,scene:null,seed:0,sceneOffset:Math.floor(Math.random()*6),target:null,reveal:null,hint:null,fx:[],parts:[],clock:0};
 try{state.best=parseInt(localStorage.getItem(KEY),10)||0}catch(e){}
+var SAVE_KEY='zoek-oswin-voortgang';
+function readSave(){
+  try{
+    var s=JSON.parse(localStorage.getItem(SAVE_KEY));
+    if(s&&s.level>1&&isFinite(s.score))return {level:Math.floor(s.level),score:Math.max(0,Math.floor(s.score)),hints:clamp(s.hints|0,0,3)};
+  }catch(e){}
+  return null;
+}
+function writeSave(level,score,hints){try{localStorage.setItem(SAVE_KEY,JSON.stringify({level:level,score:score,hints:hints}))}catch(e){}}
+function clearSave(){try{localStorage.removeItem(SAVE_KEY)}catch(e){}}
 
 var vw=0,vh=0,dpr=1,cam={x:0,y:0,z:1},anim=null;
 function minZ(){return Math.max(vw/W,vh/H)}
@@ -886,7 +899,7 @@ function prepareLevel(){
   hud.where.appendChild(document.createTextNode(' · plattegrond '+String(state.seed%10000).padStart(4,'0')+' · '+(cnt>1?cnt+' gezochten':'1 gezochte')));
   renderFriends();resetCam();updateHud();
 }
-function beginPlay(){state.phase='playing';hideSheet();$('intro').hidden=true;updateHud();try{view.focus({preventScroll:true})}catch(e){}}
+function beginPlay(){state.phase='playing';writeSave(state.level,state.score,state.hints);hideSheet();$('intro').hidden=true;updateHud();try{view.focus({preventScroll:true})}catch(e){}}
 function spark(x,y,n){
   var cols=['#ffe08a','#ffffff','#7fe3dc','#f0c66a'];
   for(var i=0;i<n;i++){var a=Math.random()*TAU,sp=lerp(40,200,Math.random());
@@ -897,6 +910,7 @@ function onFound(T){
   var n=state.targets.length;
   var pts=100*n+state.level*25+Math.round(state.timeLeft)*4;
   state.score+=pts;
+  writeSave(state.level+1,state.score,state.hints);
   var rec=false;
   if(state.score>state.best){state.best=state.score;rec=true;try{localStorage.setItem(KEY,String(state.best))}catch(e){}}
   flyTo(T.x,T.y-T.h*0.5,2.0,0.7);
@@ -915,7 +929,7 @@ function onHit(T,i){
   onFound(T);
 }
 function onTimeUp(){
-  state.phase='over';state.timeLeft=0;
+  state.phase='over';state.timeLeft=0;clearSave();
   var miss=state.targets.filter(function(t){return !t.found});
   miss.forEach(function(T){state.reveals.push({x:T.x,y:T.y-T.h*0.55,r:T.h*0.75,color:'#ea6b5a'})});
   var T0=miss[0]||state.target;
@@ -1067,6 +1081,12 @@ view.addEventListener('keydown',function(e){
 });
 $('zin').addEventListener('click',function(){anim=null;zoomAt(vw/2,vh/2,cam.z*1.35)});
 $('zout').addEventListener('click',function(){anim=null;zoomAt(vw/2,vh/2,cam.z/1.35)});
+function refreshIntro(){
+  var sv=readSave(),r=$('resumeSaveBtn'),b=$('startBtn');
+  r.hidden=!sv;
+  if(sv){r.textContent='Verdergaan in zaal '+sv.level+' ('+sv.score+' punten)';b.textContent='Nieuw spel';b.classList.remove('primary')}
+  else{b.textContent='Start de zoektocht';b.classList.add('primary')}
+}
 function pauseGame(){
   if(state.phase!=='playing')return;
   state.phase='paused';$('pause').hidden=false;updateHud();
@@ -1078,8 +1098,10 @@ function resumeGame(){
   try{view.focus({preventScroll:true})}catch(e){}
 }
 function toMenu(){
+  if(state.phase==='playing'||state.phase==='paused')writeSave(state.level,state.score,state.hints);
   state.level=1;state.score=0;state.hints=3;
   state.phase='intro';$('pause').hidden=true;hideSheet();$('intro').hidden=false;
+  refreshIntro();
   prepareLevel();
   try{$('startBtn').focus({preventScroll:true})}catch(e){}
 }
@@ -1091,6 +1113,11 @@ document.addEventListener('keydown',function(e){
   if(e.key==='p'||e.key==='P'||e.key==='Escape'){
     if(state.phase==='playing')pauseGame();else if(state.phase==='paused')resumeGame();
   }
+});
+$('resumeSaveBtn').addEventListener('click',function(){
+  var sv=readSave();if(!sv)return;
+  state.level=sv.level;state.score=sv.score;state.hints=sv.hints;
+  prepareLevel();beginPlay();
 });
 $('hintBtn').addEventListener('click',useHint);
 $('startBtn').addEventListener('click',beginPlay);
@@ -1106,6 +1133,7 @@ if(window.ResizeObserver){new ResizeObserver(function(){resize()}).observe(stage
 window.addEventListener('resize',resize);
 resize();
 prepareLevel();
+refreshIntro();
 requestAnimationFrame(function(ts){last=ts;requestAnimationFrame(frame)});
 })();
 </script>
